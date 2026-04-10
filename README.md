@@ -75,6 +75,45 @@ Follow mode:
 python3 phantom_cli_alerts.py --csv alerts.csv --follow --interval 3
 ```
 
+## Single-script mode (recommended)
+
+If you do not want to run two scripts, use:
+
+```bash
+python3 unified_phantom_alerts.py --interval 2 --profile-dir .bb_profile
+```
+
+This single script:
+
+- captures phantom prints from BlackBox
+- appends to CSV
+- emits de-duped CLI alerts
+- optionally sends WhatsApp alerts
+
+### Optional watchlist
+
+```bash
+python3 unified_phantom_alerts.py --watchlist QQQ,SPY,TSLA
+```
+
+### Optional WhatsApp sender (Cloud API)
+
+```bash
+export WA_TOKEN="..."
+export WA_PHONE_NUMBER_ID="..."
+export WA_TO="15551234567"
+python3 unified_phantom_alerts.py --whatsapp
+```
+
+PowerShell:
+
+```powershell
+$env:WA_TOKEN="..."
+$env:WA_PHONE_NUMBER_ID="..."
+$env:WA_TO="15551234567"
+python .\unified_phantom_alerts.py --whatsapp
+```
+
 A sample CSV is included at:
 
 - `examples/alerts.sample.csv`
