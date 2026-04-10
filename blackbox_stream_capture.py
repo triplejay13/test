@@ -36,7 +36,7 @@ def append_rows(path: Path, rows: list[tuple[str, str, str, str]]) -> None:
         writer.writerows(rows)
 
 
-def extract_stream_rows(page) -> list[tuple[str, str, str, str]]:
+def extract_stream_rows(page, phantom_only: bool) -> list[tuple[str, str, str, str]]:
     # Reads text lines from the panel containing "ALERT STREAM".
     lines = page.evaluate(
         """
@@ -67,7 +67,9 @@ def extract_stream_rows(page) -> list[tuple[str, str, str, str]]:
                 f"${match.group('price')}",
             )
         )
-    return rows
+    if not phantom_only:
+        return rows
+    return [row for row in rows if "phantom print" in row[2].lower()]
 
 
 def _fill_first(page, selectors: list[str], value: str) -> bool:
@@ -152,6 +154,7 @@ def run_capture(
     password_env: str,
     login_timeout: float,
     profile_dir: str,
+    phantom_only: bool,
 ) -> int:
     try:
         from playwright.sync_api import sync_playwright
@@ -221,7 +224,7 @@ def run_capture(
 
         while True:
             try:
-                parsed_rows = extract_stream_rows(page)
+                parsed_rows = extract_stream_rows(page, phantom_only=phantom_only)
                 new_rows: list[tuple[str, str, str, str]] = []
                 for row in parsed_rows:
                     key = "|".join(row)
@@ -299,6 +302,11 @@ def main() -> int:
         default=".bb_profile",
         help="Chromium profile dir for persistent login/cookies (default: .bb_profile)",
     )
+    parser.add_argument(
+        "--all-alerts",
+        action="store_true",
+        help="Capture all stream rows (default is phantom-print-only capture)",
+    )
     args = parser.parse_args()
 
     return run_capture(
@@ -312,6 +320,7 @@ def main() -> int:
         args.password_env,
         args.login_timeout,
         args.profile_dir,
+        not args.all_alerts,
     )
 
 

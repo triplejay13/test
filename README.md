@@ -61,6 +61,8 @@ python .\blackbox_stream_capture.py --output alerts.csv --interval 2 --profile-d
 
 Login once manually in that profile; future runs can reuse cookies/session.
 
+By default, capture is **phantom-print-only**. To capture every alert row instead, add `--all-alerts`.
+
 ## 2) Run phantom-only alerts from CSV
 
 ```bash
