@@ -69,7 +69,13 @@ def extract_stream_rows(page) -> list[tuple[str, str, str, str]]:
     return rows
 
 
-def run_capture(output_csv: Path, interval: float, headless: bool) -> int:
+def run_capture(
+    output_csv: Path,
+    interval: float,
+    headless: bool,
+    once: bool,
+    wait_timeout: float,
+) -> int:
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
@@ -89,6 +95,22 @@ def run_capture(output_csv: Path, interval: float, headless: bool) -> int:
 
         print("Login to BlackBox in the opened browser, then keep ALERT STREAM visible.")
         print(f"Capturing rows to {output_csv} every {interval:.1f}s...")
+        print(f"Waiting up to {wait_timeout:.0f}s for ALERT STREAM panel...")
+
+        try:
+            page.wait_for_function(
+                """() => {
+                    const panels = [...document.querySelectorAll('div,section')];
+                    return panels.some(p => /ALERT STREAM/i.test(p.innerText || ''));
+                }""",
+                timeout=int(wait_timeout * 1000),
+            )
+        except Exception:
+            print(
+                "[WARN] ALERT STREAM panel was not detected in time. "
+                "Make sure you are logged in and the panel is visible.",
+                file=sys.stderr,
+            )
 
         while True:
             try:
@@ -104,6 +126,9 @@ def run_capture(output_csv: Path, interval: float, headless: bool) -> int:
                 append_rows(output_csv, new_rows)
                 for t, s, m, ptxt in new_rows:
                     print(f"[CAPTURED] {t} {s} {m} {ptxt}", flush=True)
+                if once:
+                    browser.close()
+                    return 0
             except KeyboardInterrupt:
                 browser.close()
                 return 0
@@ -121,9 +146,26 @@ def main() -> int:
         action="store_true",
         help="Run browser in headless mode (default opens visible browser)",
     )
+    parser.add_argument(
+        "--once",
+        action="store_true",
+        help="Run a single capture pass and exit (recommended for first test)",
+    )
+    parser.add_argument(
+        "--wait-timeout",
+        type=float,
+        default=120.0,
+        help="Seconds to wait for ALERT STREAM panel before warning (default: 120)",
+    )
     args = parser.parse_args()
 
-    return run_capture(Path(args.output), args.interval, args.headless)
+    return run_capture(
+        Path(args.output),
+        args.interval,
+        args.headless,
+        args.once,
+        args.wait_timeout,
+    )
 
 
 if __name__ == "__main__":

@@ -17,6 +17,26 @@ Then login in the opened browser and keep `ALERT STREAM` visible. The script app
 
 > Note: this is UI automation (not an official BlackBox developer feed).
 
+### Quick extraction test (recommended)
+
+1. Install Playwright package:
+   ```bash
+   python3 -m pip install playwright
+   ```
+2. Install Chromium for Playwright:
+   ```bash
+   python3 -m playwright install chromium
+   ```
+3. Run one-pass capture test:
+   ```bash
+   python3 blackbox_stream_capture.py --output alerts.csv --once --interval 2
+   ```
+4. Login and keep `ALERT STREAM` visible; after one pass the script exits.
+5. Verify captured rows:
+   ```bash
+   cat alerts.csv
+   ```
+
 ## 2) Run phantom-only alerts from CSV
 
 ```bash
