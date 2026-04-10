@@ -122,6 +122,25 @@ $env:WA_GROUP_NAME="Phantoms"
 python .\unified_phantom_alerts.py --whatsapp
 ```
 
+### Local WhatsApp webhook bridge setup (recommended for your flow)
+
+In a separate PowerShell window:
+
+```powershell
+npm install whatsapp-web.js qrcode-terminal
+node .\wa_webhook_bridge.js
+```
+
+Scan the QR once in WhatsApp (Linked Devices), and keep this bridge running.
+
+Then in your bot terminal:
+
+```powershell
+$env:WA_WEBHOOK_URL="http://127.0.0.1:8787/send"
+$env:WA_GROUP_NAME="Phantoms"
+python .\unified_phantom_alerts.py --whatsapp --interval 2
+```
+
 A sample CSV is included at:
 
 - `examples/alerts.sample.csv`
