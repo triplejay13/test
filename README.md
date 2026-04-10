@@ -53,6 +53,14 @@ $env:BB_PASSWORD="your_password"
 python .\blackbox_stream_capture.py --output alerts.csv --auto-login --interval 2
 ```
 
+If you hit reCAPTCHA/login friction, run without `--auto-login` and use a persistent browser profile:
+
+```powershell
+python .\blackbox_stream_capture.py --output alerts.csv --interval 2 --profile-dir .\.bb_profile
+```
+
+Login once manually in that profile; future runs can reuse cookies/session.
+
 ## 2) Run phantom-only alerts from CSV
 
 ```bash

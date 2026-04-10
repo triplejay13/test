@@ -151,6 +151,7 @@ def run_capture(
     email_env: str,
     password_env: str,
     login_timeout: float,
+    profile_dir: str,
 ) -> int:
     try:
         from playwright.sync_api import sync_playwright
@@ -165,8 +166,18 @@ def run_capture(
     seen: set[str] = set()
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=headless)
-        page = browser.new_page()
+        if profile_dir:
+            context = p.chromium.launch_persistent_context(
+                user_data_dir=profile_dir,
+                headless=headless,
+            )
+            page = context.pages[0] if context.pages else context.new_page()
+            close_target = context
+        else:
+            browser = p.chromium.launch(headless=headless)
+            page = browser.new_page()
+            close_target = browser
+
         page.goto("https://members.blackboxstocks.com", wait_until="domcontentloaded")
 
         if auto_login:
@@ -224,7 +235,7 @@ def run_capture(
                     print(f"[CAPTURED] {t} {s} {m} {ptxt}", flush=True)
                 if once:
                     if new_rows:
-                        browser.close()
+                        close_target.close()
                         return 0
                     if once_deadline and time.time() >= once_deadline:
                         print(
@@ -232,10 +243,10 @@ def run_capture(
                             "Keep ALERT STREAM visible and try again.",
                             file=sys.stderr,
                         )
-                        browser.close()
+                        close_target.close()
                         return 1
             except KeyboardInterrupt:
-                browser.close()
+                close_target.close()
                 return 0
             except Exception as exc:  # noqa: BLE001
                 print(f"[WARN] {exc}", file=sys.stderr, flush=True)
@@ -283,6 +294,11 @@ def main() -> int:
         default=30.0,
         help="Seconds to wait for post-login ALERT STREAM detection (default: 30)",
     )
+    parser.add_argument(
+        "--profile-dir",
+        default=".bb_profile",
+        help="Chromium profile dir for persistent login/cookies (default: .bb_profile)",
+    )
     args = parser.parse_args()
 
     return run_capture(
@@ -295,6 +311,7 @@ def main() -> int:
         args.email_env,
         args.password_env,
         args.login_timeout,
+        args.profile_dir,
     )
 
 
