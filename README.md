@@ -114,6 +114,13 @@ $env:WA_TO="15551234567"
 python .\unified_phantom_alerts.py --whatsapp
 ```
 
+If you already have a `whatsapp-web.js` sender service, use webhook mode instead of Cloud API:
+
+```powershell
+$env:WA_WEBHOOK_URL="http://127.0.0.1:8787/send"
+python .\unified_phantom_alerts.py --whatsapp
+```
+
 A sample CSV is included at:
 
 - `examples/alerts.sample.csv`

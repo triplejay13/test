@@ -55,6 +55,20 @@ def send_whatsapp_message(token: str, phone_id: str, to: str, message: str) -> N
             raise RuntimeError(f"WhatsApp API returned status {resp.status}")
 
 
+def send_webhook_message(webhook_url: str, message: str) -> None:
+    payload = {"text": message}
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        webhook_url,
+        data=data,
+        method="POST",
+        headers={"Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        if resp.status >= 300:
+            raise RuntimeError(f"Webhook returned status {resp.status}")
+
+
 def format_whatsapp(event) -> str:
     return (
         "🚨 Phantom Print\n"
@@ -73,11 +87,13 @@ def run(args) -> int:
     wa_token = os.getenv(args.whatsapp_token_env, "")
     wa_phone_id = os.getenv(args.whatsapp_phone_id_env, "")
     wa_to = os.getenv(args.whatsapp_to_env, "")
+    wa_webhook_url = os.getenv(args.whatsapp_webhook_env, "")
 
-    if args.whatsapp and (not wa_token or not wa_phone_id or not wa_to):
+    if args.whatsapp and (not wa_webhook_url and (not wa_token or not wa_phone_id or not wa_to)):
         print(
-            "[WARN] WhatsApp enabled but env vars missing. "
-            f"Need {args.whatsapp_token_env}, {args.whatsapp_phone_id_env}, {args.whatsapp_to_env}",
+            "[WARN] WhatsApp enabled but no transport configured. "
+            f"Set {args.whatsapp_webhook_env} for webhook mode OR set "
+            f"{args.whatsapp_token_env}, {args.whatsapp_phone_id_env}, {args.whatsapp_to_env} for Cloud API.",
             file=sys.stderr,
         )
 
@@ -132,7 +148,13 @@ def run(args) -> int:
 
                     emit_alert(event)
 
-                    if args.whatsapp and wa_token and wa_phone_id and wa_to:
+                    if args.whatsapp and wa_webhook_url:
+                        try:
+                            send_webhook_message(wa_webhook_url, format_whatsapp(event))
+                            print(f"[WHATSAPP-WEBHOOK] sent for {event.symbol} {event.time_ui}")
+                        except (urllib.error.URLError, RuntimeError) as exc:
+                            print(f"[WARN] WhatsApp webhook send failed: {exc}", file=sys.stderr)
+                    elif args.whatsapp and wa_token and wa_phone_id and wa_to:
                         try:
                             send_whatsapp_message(
                                 wa_token,
@@ -171,6 +193,11 @@ def main() -> int:
     parser.add_argument("--whatsapp-token-env", default="WA_TOKEN", help="WhatsApp API token env name")
     parser.add_argument("--whatsapp-phone-id-env", default="WA_PHONE_NUMBER_ID", help="WhatsApp phone id env name")
     parser.add_argument("--whatsapp-to-env", default="WA_TO", help="WhatsApp destination env name")
+    parser.add_argument(
+        "--whatsapp-webhook-env",
+        default="WA_WEBHOOK_URL",
+        help="Webhook URL env name for whatsapp-web.js bridge (preferred when available)",
+    )
 
     return run(parser.parse_args())
 
