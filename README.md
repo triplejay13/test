@@ -31,7 +31,7 @@ Then login in the opened browser and keep `ALERT STREAM` visible. The script app
    ```bash
    python3 blackbox_stream_capture.py --output alerts.csv --once --interval 2
    ```
-4. Login and keep `ALERT STREAM` visible; after one pass the script exits.
+4. Login and keep `ALERT STREAM` visible; in `--once` mode the script waits up to `--wait-timeout` seconds for rows, then exits.
 5. Verify captured rows:
    ```bash
    cat alerts.csv

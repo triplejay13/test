@@ -112,6 +112,8 @@ def run_capture(
                 file=sys.stderr,
             )
 
+        once_deadline = time.time() + wait_timeout if once else None
+
         while True:
             try:
                 parsed_rows = extract_stream_rows(page)
@@ -127,8 +129,17 @@ def run_capture(
                 for t, s, m, ptxt in new_rows:
                     print(f"[CAPTURED] {t} {s} {m} {ptxt}", flush=True)
                 if once:
-                    browser.close()
-                    return 0
+                    if new_rows:
+                        browser.close()
+                        return 0
+                    if once_deadline and time.time() >= once_deadline:
+                        print(
+                            "[WARN] No rows captured before timeout in --once mode. "
+                            "Keep ALERT STREAM visible and try again.",
+                            file=sys.stderr,
+                        )
+                        browser.close()
+                        return 1
             except KeyboardInterrupt:
                 browser.close()
                 return 0
