@@ -118,6 +118,7 @@ If you already have a `whatsapp-web.js` sender service, use webhook mode instead
 
 ```powershell
 $env:WA_WEBHOOK_URL="http://127.0.0.1:8787/send"
+$env:WA_GROUP_NAME="Phantoms"
 python .\unified_phantom_alerts.py --whatsapp
 ```
 

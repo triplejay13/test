@@ -55,8 +55,11 @@ def send_whatsapp_message(token: str, phone_id: str, to: str, message: str) -> N
             raise RuntimeError(f"WhatsApp API returned status {resp.status}")
 
 
-def send_webhook_message(webhook_url: str, message: str) -> None:
-    payload = {"text": message}
+def send_webhook_message(webhook_url: str, message: str, group_name: str) -> None:
+    payload = {
+        "text": message,
+        "groupName": group_name,
+    }
     data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(
         webhook_url,
@@ -88,6 +91,7 @@ def run(args) -> int:
     wa_phone_id = os.getenv(args.whatsapp_phone_id_env, "")
     wa_to = os.getenv(args.whatsapp_to_env, "")
     wa_webhook_url = os.getenv(args.whatsapp_webhook_env, "")
+    wa_group_name = os.getenv(args.whatsapp_group_env, args.whatsapp_group_name)
 
     if args.whatsapp and (not wa_webhook_url and (not wa_token or not wa_phone_id or not wa_to)):
         print(
@@ -150,7 +154,11 @@ def run(args) -> int:
 
                     if args.whatsapp and wa_webhook_url:
                         try:
-                            send_webhook_message(wa_webhook_url, format_whatsapp(event))
+                            send_webhook_message(
+                                wa_webhook_url,
+                                format_whatsapp(event),
+                                wa_group_name,
+                            )
                             print(f"[WHATSAPP-WEBHOOK] sent for {event.symbol} {event.time_ui}")
                         except (urllib.error.URLError, RuntimeError) as exc:
                             print(f"[WARN] WhatsApp webhook send failed: {exc}", file=sys.stderr)
@@ -197,6 +205,16 @@ def main() -> int:
         "--whatsapp-webhook-env",
         default="WA_WEBHOOK_URL",
         help="Webhook URL env name for whatsapp-web.js bridge (preferred when available)",
+    )
+    parser.add_argument(
+        "--whatsapp-group-name",
+        default="Phantoms",
+        help="Group name for webhook payload (default: Phantoms)",
+    )
+    parser.add_argument(
+        "--whatsapp-group-env",
+        default="WA_GROUP_NAME",
+        help="Environment variable for webhook group name override (default: WA_GROUP_NAME)",
     )
 
     return run(parser.parse_args())
