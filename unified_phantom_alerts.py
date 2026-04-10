@@ -22,6 +22,15 @@ from blackbox_stream_capture import (
 from phantom_cli_alerts import Deduper, emit_alert, parse_event
 
 
+def is_restartable_error(exc: Exception) -> bool:
+    msg = str(exc).lower()
+    return (
+        "target page, context or browser has been closed" in msg
+        or "page crashed" in msg
+        or "execution context was destroyed" in msg
+    )
+
+
 def parse_watchlist(raw: str) -> set[str]:
     if not raw.strip():
         return set()
@@ -82,6 +91,56 @@ def format_whatsapp(event) -> str:
     )
 
 
+def ensure_alert_stream_view(page, timeout_s: float) -> None:
+    timeout_ms = int(timeout_s * 1000)
+    # Close Chromium restore bubble if present.
+    for selector in [
+        "button:has-text('Restore')",
+        "button[aria-label='Close']",
+        "button:has-text('×')",
+    ]:
+        try:
+            loc = page.locator(selector).first
+            if loc.count() > 0:
+                loc.click(timeout=500)
+        except Exception:
+            pass
+
+    # Ensure alert stream is visible and set to all symbols when possible.
+    try:
+        page.locator("text=ALERT STREAM").first.click(timeout=1500)
+    except Exception:
+        pass
+    try:
+        page.locator("text=ALL SYMBOLS").first.click(timeout=1500)
+    except Exception:
+        pass
+
+    # Ensure panel text exists before looping.
+    page.wait_for_function(
+        """() => {
+            const panels = [...document.querySelectorAll('div,section')];
+            return panels.some(p => /ALERT STREAM/i.test(p.innerText || ''));
+        }""",
+        timeout=timeout_ms,
+    )
+
+
+def start_browser_session(playwright, args):
+    context = playwright.chromium.launch_persistent_context(
+        user_data_dir=args.profile_dir,
+        headless=args.headless,
+        args=[
+            "--disable-session-crashed-bubble",
+            "--disable-features=Translate",
+            "--no-first-run",
+        ],
+    )
+    page = context.pages[0] if context.pages else context.new_page()
+    page.goto("https://members.blackboxstocks.com", wait_until="domcontentloaded")
+    return context, page
+
+
 def run(args) -> int:
     ensure_csv(Path(args.output))
     deduper = Deduper(Path(args.db))
@@ -110,12 +169,7 @@ def run(args) -> int:
     seen_rows: set[str] = set()
 
     with sync_playwright() as p:
-        context = p.chromium.launch_persistent_context(
-            user_data_dir=args.profile_dir,
-            headless=args.headless,
-        )
-        page = context.pages[0] if context.pages else context.new_page()
-        page.goto("https://members.blackboxstocks.com", wait_until="domcontentloaded")
+        context, page = start_browser_session(p, args)
 
         if args.auto_login:
             email = os.getenv(args.email_env, "")
@@ -127,6 +181,10 @@ def run(args) -> int:
                     print("[WARN] Auto-login failed; continuing manual.", file=sys.stderr)
 
         print("Single-script mode running: capture + phantom alert + optional WhatsApp")
+        try:
+            ensure_alert_stream_view(page, args.wait_timeout)
+        except Exception:
+            print("[WARN] Could not fully enforce ALERT STREAM/ALL SYMBOLS view yet.", file=sys.stderr)
 
         while True:
             try:
@@ -179,6 +237,16 @@ def run(args) -> int:
                 return 0
             except Exception as exc:  # noqa: BLE001
                 print(f"[WARN] {exc}", file=sys.stderr)
+                if is_restartable_error(exc):
+                    try:
+                        context.close()
+                    except Exception:
+                        pass
+                    context, page = start_browser_session(p, args)
+                    try:
+                        ensure_alert_stream_view(page, args.wait_timeout)
+                    except Exception:
+                        pass
             time.sleep(args.interval)
 
 
@@ -191,6 +259,7 @@ def main() -> int:
     parser.add_argument("--interval", type=float, default=2.0, help="Poll interval seconds")
     parser.add_argument("--profile-dir", default=".bb_profile", help="Persistent Chromium profile dir")
     parser.add_argument("--headless", action="store_true", help="Run browser headless")
+    parser.add_argument("--wait-timeout", type=float, default=30.0, help="UI readiness timeout seconds")
     parser.add_argument("--auto-login", action="store_true", help="Try auto-login from env vars")
     parser.add_argument("--email-env", default="BB_EMAIL", help="Email env var name")
     parser.add_argument("--password-env", default="BB_PASSWORD", help="Password env var name")

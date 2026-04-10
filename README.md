@@ -89,6 +89,8 @@ This single script:
 - appends to CSV
 - emits de-duped CLI alerts
 - optionally sends WhatsApp alerts
+- auto-attempts to focus `ALERT STREAM` and `ALL SYMBOLS`
+- auto-restarts browser session on page crash/close errors
 
 ### Optional watchlist
 
