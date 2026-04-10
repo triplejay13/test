@@ -143,6 +143,14 @@ $env:WA_GROUP_NAME="Phantoms"
 python .\unified_phantom_alerts.py --whatsapp --interval 2
 ```
 
+### Force a confirmation resend from CSV (no browser)
+
+If live stream does not currently show the old QQQ phantom, replay from CSV:
+
+```powershell
+python .\unified_phantom_alerts.py --whatsapp --replay-csv .\alerts.csv --replay-force
+```
+
 A sample CSV is included at:
 
 - `examples/alerts.sample.csv`

@@ -160,6 +160,50 @@ def run(args) -> int:
             file=sys.stderr,
         )
 
+    def deliver_event(event) -> None:
+        if not passes_watchlist(event.symbol, watchlist):
+            return
+        if not args.replay_force and not deduper.is_new(event.fingerprint):
+            return
+
+        emit_alert(event)
+
+        if args.whatsapp and wa_webhook_url:
+            try:
+                send_webhook_message(
+                    wa_webhook_url,
+                    format_whatsapp(event),
+                    wa_group_name,
+                )
+                print(f"[WHATSAPP-WEBHOOK] sent for {event.symbol} {event.time_ui}")
+            except (urllib.error.URLError, RuntimeError) as exc:
+                print(f"[WARN] WhatsApp webhook send failed: {exc}", file=sys.stderr)
+        elif args.whatsapp and wa_token and wa_phone_id and wa_to:
+            try:
+                send_whatsapp_message(
+                    wa_token,
+                    wa_phone_id,
+                    wa_to,
+                    format_whatsapp(event),
+                )
+                print(f"[WHATSAPP] sent for {event.symbol} {event.time_ui}")
+            except (urllib.error.URLError, RuntimeError) as exc:
+                print(f"[WARN] WhatsApp send failed: {exc}", file=sys.stderr)
+
+    if args.replay_csv:
+        replay_path = Path(args.replay_csv)
+        if not replay_path.exists():
+            print(f"[WARN] replay csv not found: {replay_path}", file=sys.stderr)
+            return 1
+        with replay_path.open("r", encoding="utf-8-sig", newline="") as handle:
+            reader = csv.DictReader(handle)
+            for row in reader:
+                event = parse_event(row)
+                if event is None:
+                    continue
+                deliver_event(event)
+        return 0
+
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
@@ -203,34 +247,7 @@ def run(args) -> int:
                     event = parse_event({"TIME": t, "SYMBOL": s, "MESSAGE": m, "PRICE": ptxt})
                     if event is None:
                         continue
-                    if not passes_watchlist(event.symbol, watchlist):
-                        continue
-                    if not deduper.is_new(event.fingerprint):
-                        continue
-
-                    emit_alert(event)
-
-                    if args.whatsapp and wa_webhook_url:
-                        try:
-                            send_webhook_message(
-                                wa_webhook_url,
-                                format_whatsapp(event),
-                                wa_group_name,
-                            )
-                            print(f"[WHATSAPP-WEBHOOK] sent for {event.symbol} {event.time_ui}")
-                        except (urllib.error.URLError, RuntimeError) as exc:
-                            print(f"[WARN] WhatsApp webhook send failed: {exc}", file=sys.stderr)
-                    elif args.whatsapp and wa_token and wa_phone_id and wa_to:
-                        try:
-                            send_whatsapp_message(
-                                wa_token,
-                                wa_phone_id,
-                                wa_to,
-                                format_whatsapp(event),
-                            )
-                            print(f"[WHATSAPP] sent for {event.symbol} {event.time_ui}")
-                        except (urllib.error.URLError, RuntimeError) as exc:
-                            print(f"[WARN] WhatsApp send failed: {exc}", file=sys.stderr)
+                    deliver_event(event)
 
             except KeyboardInterrupt:
                 context.close()
@@ -265,6 +282,16 @@ def main() -> int:
     parser.add_argument("--password-env", default="BB_PASSWORD", help="Password env var name")
     parser.add_argument("--login-timeout", type=float, default=30.0, help="Auto-login wait timeout")
     parser.add_argument("--watchlist", default="", help="Comma-separated tickers, optional")
+    parser.add_argument(
+        "--replay-csv",
+        default="",
+        help="Replay phantom rows from an existing CSV (no browser capture). Useful for confirmation sends.",
+    )
+    parser.add_argument(
+        "--replay-force",
+        action="store_true",
+        help="When replaying, ignore dedupe and send events again.",
+    )
 
     parser.add_argument("--whatsapp", action="store_true", help="Enable WhatsApp sends")
     parser.add_argument("--whatsapp-token-env", default="WA_TOKEN", help="WhatsApp API token env name")
