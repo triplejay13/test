@@ -4,6 +4,10 @@
 
 `phantom_cli_alerts.py` reads a BlackBox-style CSV export and logs **phantom-print-only** alerts to the command line.
 
+A sample CSV is included at:
+
+- `examples/alerts.sample.csv`
+
 ### Required CSV columns
 
 - `TIME`
@@ -18,13 +22,13 @@ Example message format expected:
 ### Run once
 
 ```bash
-python3 phantom_cli_alerts.py --csv alerts.csv
+python3 phantom_cli_alerts.py --csv examples/alerts.sample.csv
 ```
 
 ### Follow mode (poll and emit only new phantom prints)
 
 ```bash
-python3 phantom_cli_alerts.py --csv alerts.csv --follow --interval 3
+python3 phantom_cli_alerts.py --csv examples/alerts.sample.csv --follow --interval 3
 ```
 
 ### Notes
