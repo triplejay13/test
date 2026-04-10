@@ -23,86 +23,45 @@ function norm(s) {
 }
 
 let ready = false;
-let client = null;
-let readyWaiters = [];
+const client = new Client({
+  authStrategy: new LocalAuth({ clientId: "blackbox-phantom-bridge" }),
+  puppeteer: {
+    headless: true,
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+  },
+});
 
-function notifyReady() {
-  for (const fn of readyWaiters) fn();
-  readyWaiters = [];
-}
+client.on("qr", (qr) => {
+  console.log("[WA] Scan this QR in WhatsApp:");
+  qrcode.generate(qr, { small: true });
+});
 
-function waitForReady(timeoutMs = 60000) {
-  if (ready) return Promise.resolve();
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(
-      () => reject(new Error(`WhatsApp not ready after ${timeoutMs}ms`)),
-      timeoutMs
-    );
-    readyWaiters.push(() => {
-      clearTimeout(timeout);
-      resolve();
-    });
-  });
-}
-
-function isDetachedFrameError(err) {
-  return String(err?.message || "").toLowerCase().includes("detached frame");
-}
-
-async function initClient() {
+client.on("authenticated", () => console.log("[WA] Authenticated"));
+client.on("ready", () => {
+  ready = true;
+  console.log("[WA] Ready");
+});
+client.on("auth_failure", (msg) => console.error("[WA] Auth failure:", msg));
+client.on("disconnected", (reason) => {
   ready = false;
-  client = new Client({
-    authStrategy: new LocalAuth({ clientId: "blackbox-phantom-bridge" }),
-    puppeteer: {
-      headless: true,
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    },
-  });
-
-  client.on("qr", (qr) => {
-    console.log("[WA] Scan this QR in WhatsApp:");
-    qrcode.generate(qr, { small: true });
-  });
-
-  client.on("authenticated", () => console.log("[WA] Authenticated"));
-  client.on("ready", () => {
-    ready = true;
-    console.log("[WA] Ready");
-    notifyReady();
-  });
-  client.on("auth_failure", (msg) => console.error("[WA] Auth failure:", msg));
-  client.on("disconnected", (reason) => {
-    ready = false;
-    console.error("[WA] Disconnected:", reason);
-  });
-
-  await client.initialize();
-}
-
-async function restartClient() {
-  console.log("[WA] Restarting client...");
-  try {
-    if (client) await client.destroy();
-  } catch {}
-  await initClient();
-  await waitForReady(90000);
-}
+  console.error("[WA] Disconnected:", reason);
+});
 
 async function sendToGroup(groupName, text) {
-  try {
-    const chats = await client.getChats();
-    const group = chats.find((c) => c.isGroup && norm(c.name) === norm(groupName));
-    if (!group) throw new Error(`Group not found: ${groupName}`);
-    await client.sendMessage(group.id._serialized, text);
-  } catch (err) {
-    if (!isDetachedFrameError(err)) throw err;
-    console.warn("[WA] Detached frame detected, recovering client and retrying once...");
-    await restartClient();
-    const chats = await client.getChats();
-    const group = chats.find((c) => c.isGroup && norm(c.name) === norm(groupName));
-    if (!group) throw new Error(`Group not found after recovery: ${groupName}`);
-    await client.sendMessage(group.id._serialized, text);
+  const chats = await client.getChats();
+  const group = chats.find(
+    (c) => c.isGroup && norm(c.name).includes(norm(groupName))
+  );
+  if (!group) {
+    const groupList = chats
+      .filter((c) => c.isGroup)
+      .map((c) => `"${c.name}"`)
+      .join(", ");
+    throw new Error(
+      `Group not found: "${groupName}". Available groups: ${groupList || "(none)"}`
+    );
   }
+  await client.sendMessage(group.id._serialized, text);
 }
 
 const server = http.createServer((req, res) => {
@@ -130,12 +89,13 @@ const server = http.createServer((req, res) => {
       await sendToGroup(groupName, text);
       return json(res, 200, { ok: true });
     } catch (err) {
+      console.error("[WA] Send failed:", err.message);
       return json(res, 500, { ok: false, error: String(err.message || err) });
     }
   });
 });
 
-initClient().catch((err) => {
+client.initialize().catch((err) => {
   console.error("[WA] Initialize failed:", err);
   process.exit(1);
 });
