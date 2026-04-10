@@ -134,6 +134,7 @@ node .\wa_webhook_bridge.js
 ```
 
 Scan the QR once in WhatsApp (Linked Devices), and keep this bridge running.
+If you hit unstable WhatsApp Web sessions, use Node 20 LTS (recommended for `whatsapp-web.js`).
 
 Then in your bot terminal:
 
