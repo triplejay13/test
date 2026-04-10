@@ -97,26 +97,49 @@ def _click_first(page, selectors: list[str]) -> bool:
 
 
 def try_auto_login(page, email: str, password: str, login_timeout: float) -> bool:
-    email_ok = _fill_first(
-        page,
-        [
-            "input[type='email']",
-            "input[name='email']",
-            "input[name='username']",
-            "input[placeholder*='mail' i]",
-            "input[placeholder*='user' i]",
-        ],
-        email,
-    )
-    pass_ok = _fill_first(
-        page,
-        [
-            "input[type='password']",
-            "input[name='password']",
-            "input[placeholder*='password' i]",
-        ],
-        password,
-    )
+    email_ok = False
+    pass_ok = False
+
+    # Prefer explicit label-based fill on login form.
+    try:
+        page.get_by_label("Email Address", exact=False).first.fill(email)
+        email_ok = True
+    except Exception:
+        pass
+
+    try:
+        page.get_by_label("Password", exact=False).first.fill(password)
+        pass_ok = True
+    except Exception:
+        pass
+
+    # Fallback to generic selectors when labels are unavailable.
+    if not email_ok:
+        email_ok = _fill_first(
+            page,
+            [
+                "input[type='email']",
+                "input[name='email']",
+                "input[name='username']",
+                "input[name='user']",
+                "input[placeholder*='email' i]",
+                "input[placeholder*='mail' i]",
+                "input[aria-label*='email' i]",
+                "input[type='text']",
+            ],
+            email,
+        )
+    if not pass_ok:
+        pass_ok = _fill_first(
+            page,
+            [
+                "input[type='password']",
+                "input[name='password']",
+                "input[placeholder*='password' i]",
+                "input[aria-label*='password' i]",
+            ],
+            password,
+        )
     click_ok = _click_first(
         page,
         [
