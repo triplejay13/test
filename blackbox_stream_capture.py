@@ -44,7 +44,7 @@ def extract_stream_rows(page) -> list[tuple[str, str, str, str]]:
           const streamPanel = panels.find(p => /ALERT STREAM/i.test(p.innerText || ''));
           if (!streamPanel) return [];
           return (streamPanel.innerText || '')
-            .split('\n')
+            .split('\\n')
             .map(s => s.trim())
             .filter(Boolean);
         }
