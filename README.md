@@ -37,6 +37,22 @@ Then login in the opened browser and keep `ALERT STREAM` visible. The script app
    cat alerts.csv
    ```
 
+### Optional auto-login (env vars)
+
+```bash
+export BB_EMAIL="you@example.com"
+export BB_PASSWORD="your_password"
+python3 blackbox_stream_capture.py --output alerts.csv --auto-login --interval 2
+```
+
+PowerShell:
+
+```powershell
+$env:BB_EMAIL="you@example.com"
+$env:BB_PASSWORD="your_password"
+python .\blackbox_stream_capture.py --output alerts.csv --auto-login --interval 2
+```
+
 ## 2) Run phantom-only alerts from CSV
 
 ```bash

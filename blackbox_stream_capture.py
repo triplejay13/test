@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import os
 import re
 import sys
 import time
@@ -69,12 +70,87 @@ def extract_stream_rows(page) -> list[tuple[str, str, str, str]]:
     return rows
 
 
+def _fill_first(page, selectors: list[str], value: str) -> bool:
+    for selector in selectors:
+        try:
+            locator = page.locator(selector).first
+            if locator.count() > 0:
+                locator.fill(value)
+                return True
+        except Exception:
+            continue
+    return False
+
+
+def _click_first(page, selectors: list[str]) -> bool:
+    for selector in selectors:
+        try:
+            locator = page.locator(selector).first
+            if locator.count() > 0:
+                locator.click()
+                return True
+        except Exception:
+            continue
+    return False
+
+
+def try_auto_login(page, email: str, password: str, login_timeout: float) -> bool:
+    email_ok = _fill_first(
+        page,
+        [
+            "input[type='email']",
+            "input[name='email']",
+            "input[name='username']",
+            "input[placeholder*='mail' i]",
+            "input[placeholder*='user' i]",
+        ],
+        email,
+    )
+    pass_ok = _fill_first(
+        page,
+        [
+            "input[type='password']",
+            "input[name='password']",
+            "input[placeholder*='password' i]",
+        ],
+        password,
+    )
+    click_ok = _click_first(
+        page,
+        [
+            "button:has-text('Login')",
+            "button:has-text('Log In')",
+            "button:has-text('Sign In')",
+            "button[type='submit']",
+        ],
+    )
+
+    if not (email_ok and pass_ok and click_ok):
+        return False
+
+    try:
+        page.wait_for_function(
+            """() => {
+                const panels = [...document.querySelectorAll('div,section')];
+                return panels.some(p => /ALERT STREAM/i.test(p.innerText || ''));
+            }""",
+            timeout=int(login_timeout * 1000),
+        )
+        return True
+    except Exception:
+        return False
+
+
 def run_capture(
     output_csv: Path,
     interval: float,
     headless: bool,
     once: bool,
     wait_timeout: float,
+    auto_login: bool,
+    email_env: str,
+    password_env: str,
+    login_timeout: float,
 ) -> int:
     try:
         from playwright.sync_api import sync_playwright
@@ -92,6 +168,24 @@ def run_capture(
         browser = p.chromium.launch(headless=headless)
         page = browser.new_page()
         page.goto("https://members.blackboxstocks.com", wait_until="domcontentloaded")
+
+        if auto_login:
+            email = os.getenv(email_env, "")
+            password = os.getenv(password_env, "")
+            if not email or not password:
+                print(
+                    f"[WARN] --auto-login set but missing env vars: {email_env}/{password_env}",
+                    file=sys.stderr,
+                )
+            else:
+                success = try_auto_login(page, email, password, login_timeout)
+                if success:
+                    print("[INFO] Auto-login succeeded.", flush=True)
+                else:
+                    print(
+                        "[WARN] Auto-login could not complete; continuing with manual login.",
+                        file=sys.stderr,
+                    )
 
         print("Login to BlackBox in the opened browser, then keep ALERT STREAM visible.")
         print(f"Capturing rows to {output_csv} every {interval:.1f}s...")
@@ -168,6 +262,27 @@ def main() -> int:
         default=120.0,
         help="Seconds to wait for ALERT STREAM panel before warning (default: 120)",
     )
+    parser.add_argument(
+        "--auto-login",
+        action="store_true",
+        help="Attempt login using environment variables (see --email-env/--password-env)",
+    )
+    parser.add_argument(
+        "--email-env",
+        default="BB_EMAIL",
+        help="Environment variable name for BlackBox email (default: BB_EMAIL)",
+    )
+    parser.add_argument(
+        "--password-env",
+        default="BB_PASSWORD",
+        help="Environment variable name for BlackBox password (default: BB_PASSWORD)",
+    )
+    parser.add_argument(
+        "--login-timeout",
+        type=float,
+        default=30.0,
+        help="Seconds to wait for post-login ALERT STREAM detection (default: 30)",
+    )
     args = parser.parse_args()
 
     return run_capture(
@@ -176,6 +291,10 @@ def main() -> int:
         args.headless,
         args.once,
         args.wait_timeout,
+        args.auto_login,
+        args.email_env,
+        args.password_env,
+        args.login_timeout,
     )
 
 
